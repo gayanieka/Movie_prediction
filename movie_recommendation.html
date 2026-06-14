@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Movie Recommender</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #ffffff;
+      --bg-secondary: #f5f4f0;
+      --text: #1a1a18;
+      --text-muted: #6b6b67;
+      --text-hint: #a0a09a;
+      --border: rgba(0,0,0,0.12);
+      --border-med: rgba(0,0,0,0.22);
+      --accent: #D85A30;
+      --accent-dark: #993C1D;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1a1a18;
+        --bg-secondary: #252522;
+        --text: #f0ede6;
+        --text-muted: #9a9992;
+        --text-hint: #636059;
+        --border: rgba(255,255,255,0.1);
+        --border-med: rgba(255,255,255,0.2);
+      }
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* NAV */
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.1rem 2rem;
+      border-bottom: 0.5px solid var(--border);
+    }
+
+    .nav-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .nav-logo span { color: var(--accent); }
+
+    .nav-links {
+      display: flex;
+      gap: 1.5rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      font-size: 13px;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .nav-links a:hover { color: var(--text); }
+
+    /* HERO */
+    .hero {
+      text-align: center;
+      padding: 4rem 2rem 3.5rem;
+      border-bottom: 0.5px solid var(--border);
+    }
+
+    .film-strip {
+      display: flex;
+      gap: 7px;
+      justify-content: center;
+      margin-bottom: 2rem;
+      opacity: 0.15;
+    }
+
+    .hole {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--text);
+    }
+
+    .eyebrow {
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-hint);
+      margin-bottom: 1.1rem;
+    }
+
+    h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(32px, 6vw, 48px);
+      font-weight: 700;
+      line-height: 1.15;
+      color: var(--text);
+      max-width: 580px;
+      margin: 0 auto 1rem;
+    }
+
+    h1 em {
+      font-style: italic;
+      color: var(--accent);
+    }
+
+    .hero-sub {
+      font-size: 15px;
+      color: var(--text-muted);
+      max-width: 400px;
+      margin: 0 auto 2.5rem;
+      line-height: 1.7;
+    }
+
+    /* SEARCH */
+    .search-wrap {
+      display: flex;
+      max-width: 520px;
+      margin: 0 auto;
+      border: 1px solid var(--border-med);
+      border-radius: 100px;
+      overflow: hidden;
+      background: var(--bg);
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .search-wrap:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(216, 90, 48, 0.12);
+    }
+
+    .search-wrap input {
+      flex: 1;
+      border: none;
+      outline: none;
+      padding: 0.9rem 1.4rem;
+      font-size: 15px;
+      font-family: 'Inter', sans-serif;
+      background: transparent;
+      color: var(--text);
+      min-width: 0;
+    }
+
+    .search-wrap input::placeholder { color: var(--text-hint); }
+
+    .search-btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 0 1.5rem;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      border-radius: 0 100px 100px 0;
+      font-family: 'Inter', sans-serif;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+
+    .search-btn:hover { background: var(--accent-dark); }
+
+    .chips {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 1.25rem;
+    }
+
+    .chip {
+      font-size: 12px;
+      padding: 5px 14px;
+      border-radius: 100px;
+      border: 0.5px solid var(--border-med);
+      background: var(--bg-secondary);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: border-color 0.12s, color 0.12s;
+      font-family: inherit;
+    }
+
+    .chip:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* HOW IT WORKS */
+    .how {
+      padding: 3rem 2rem;
+      border-bottom: 0.5px solid var(--border);
+    }
+
+    .section-label {
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-hint);
+      margin-bottom: 2rem;
+      text-align: center;
+    }
+
+    .steps {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 0;
+      max-width: 620px;
+      margin: 0 auto;
+      flex-wrap: wrap;
+    }
+
+    .step {
+      text-align: center;
+      flex: 1;
+      min-width: 130px;
+    }
+
+    .step-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--bg-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 0.85rem;
+      font-size: 20px;
+      color: var(--accent);
+    }
+
+    .step h3 {
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 5px;
+      color: var(--text);
+    }
+
+    .step p {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.55;
+      max-width: 120px;
+      margin: 0 auto;
+    }
+
+    .step-arrow {
+      align-self: center;
+      padding: 0 0.5rem;
+      color: var(--border-med);
+      font-size: 18px;
+      flex-shrink: 0;
+      padding-bottom: 2rem;
+    }
+
+    /* RESULTS PREVIEW */
+    .preview {
+      padding: 3rem 2rem;
+      border-bottom: 0.5px solid var(--border);
+    }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 10px;
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    .movie-card {
+      background: var(--bg);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1rem;
+      transition: border-color 0.15s, transform 0.15s;
+    }
+
+    .movie-card:hover {
+      border-color: var(--border-med);
+      transform: translateY(-2px);
+    }
+
+    .card-rank {
+      font-size: 11px;
+      color: var(--accent);
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+
+    .card-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 1.35;
+      color: var(--text);
+      margin-bottom: 5px;
+    }
+
+    .card-meta {
+      font-size: 11px;
+      color: var(--text-hint);
+      margin-bottom: 8px;
+    }
+
+    .bar-bg {
+      height: 2px;
+      background: var(--bg-secondary);
+      border-radius: 2px;
+    }
+
+    .bar-fill {
+      height: 2px;
+      background: var(--accent);
+      border-radius: 2px;
+      transition: width 0.6s ease;
+    }
+
+    /* STATS */
+    .stats {
+      padding: 3rem 2rem;
+      text-align: center;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: center;
+      gap: 3rem;
+      flex-wrap: wrap;
+    }
+
+    .stat-num {
+      font-family: 'Playfair Display', serif;
+      font-size: 36px;
+      color: var(--text);
+      display: block;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--text-hint);
+      margin-top: 3px;
+    }
+
+    /* FOOTER */
+    footer {
+      padding: 1.5rem 2rem;
+      border-top: 0.5px solid var(--border);
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-hint);
+    }
+
+    footer a { color: var(--text-muted); text-decoration: none; }
+    footer a:hover { color: var(--accent); }
+
+    /* RESULT SECTION (hidden by default) */
+    .results-section {
+      display: none;
+      padding: 3rem 2rem;
+      border-bottom: 0.5px solid var(--border);
+    }
+
+    .results-section.visible { display: block; }
+
+    .results-list {
+      max-width: 640px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 10px;
+    }
+
+    .loading-msg {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 14px;
+      padding: 2rem;
+    }
+
+    @media (max-width: 600px) {
+      nav { padding: 1rem; }
+      .nav-links { display: none; }
+      h1 { font-size: 28px; }
+      .step-arrow { display: none; }
+      .step { min-width: 100%; margin-bottom: 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <a href="#" class="nav-logo">Cine<span>Match</span></a>
+    <ul class="nav-links">
+      <li><a href="#">How it works</a></li>
+      <li><a href="#">About</a></li>
+      <li><a href="https://github.com" target="_blank">GitHub</a></li>
+    </ul>
+  </nav>
+
+  <section class="hero">
+    <div class="film-strip" aria-hidden="true">
+      <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+      <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+      <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+    </div>
+
+    <p class="eyebrow">Content-based recommendation engine</p>
+    <h1>Tell us a film you love.<br><em>We'll find your next one.</em></h1>
+    <p class="hero-sub">Powered by TF-IDF and cosine similarity across genre, cast, director, and plot keywords.</p>
+
+    <div class="search-wrap">
+      <input id="movie-input" type="text" placeholder="e.g. The Dark Knight, Inception…" />
+      <button class="search-btn" onclick="handleSearch()">&#9654; Recommend</button>
+    </div>
+
+    <div class="chips">
+      <button class="chip" onclick="fillSearch('Inception')">Inception</button>
+      <button class="chip" onclick="fillSearch('The Avengers')">The Avengers</button>
+      <button class="chip" onclick="fillSearch('Interstellar')">Interstellar</button>
+      <button class="chip" onclick="fillSearch('The Godfather')">The Godfather</button>
+      <button class="chip" onclick="fillSearch('The Dark Knight')">The Dark Knight</button>
+    </div>
+  </section>
+
+  <!-- Live results section -->
+  <section class="results-section" id="results-section">
+    <p class="section-label" id="results-label">Results</p>
+    <div class="results-list" id="results-list">
+      <p class="loading-msg">Finding similar movies…</p>
+    </div>
+  </section>
+
+  <section class="how">
+    <p class="section-label">How it works</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-icon">✏️</div>
+        <h3>Enter a title</h3>
+        <p>Type any movie name — fuzzy matching handles typos</p>
+      </div>
+      <div class="step-arrow">→</div>
+      <div class="step">
+        <div class="step-icon">📐</div>
+        <h3>Vectorize</h3>
+        <p>Genres, cast, director & keywords become TF-IDF vectors</p>
+      </div>
+      <div class="step-arrow">→</div>
+      <div class="step">
+        <div class="step-icon">🎯</div>
+        <h3>Score & rank</h3>
+        <p>Cosine similarity ranks every film in the dataset</p>
+      </div>
+      <div class="step-arrow">→</div>
+      <div class="step">
+        <div class="step-icon">🎬</div>
+        <h3>Get 30 picks</h3>
+        <p>Your personalised list, sorted by match strength</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="preview">
+    <p class="section-label">Sample results for "Inception"</p>
+    <div class="cards-grid">
+      <div class="movie-card">
+        <p class="card-rank">#1 match</p>
+        <p class="card-title">The Dark Knight</p>
+        <p class="card-meta">Christopher Nolan · Action</p>
+        <div class="bar-bg"><div class="bar-fill" style="width:94%"></div></div>
+      </div>
+      <div class="movie-card">
+        <p class="card-rank">#2 match</p>
+        <p class="card-title">Interstellar</p>
+        <p class="card-meta">Christopher Nolan · Sci-Fi</p>
+        <div class="bar-bg"><div class="bar-fill" style="width:88%"></div></div>
+      </div>
+      <div class="movie-card">
+        <p class="card-rank">#3 match</p>
+        <p class="card-title">The Prestige</p>
+        <p class="card-meta">Christopher Nolan · Mystery</p>
+        <div class="bar-bg"><div class="bar-fill" style="width:81%"></div></div>
+      </div>
+      <div class="movie-card">
+        <p class="card-rank">#4 match</p>
+        <p class="card-title">Memento</p>
+        <p class="card-meta">Christopher Nolan · Thriller</p>
+        <div class="bar-bg"><div class="bar-fill" style="width:76%"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="stats">
+    <p class="section-label">Dataset</p>
+    <div class="stat-row">
+      <div>
+        <span class="stat-num">4,803</span>
+        <p class="stat-label">movies indexed</p>
+      </div>
+      <div>
+        <span class="stat-num">5</span>
+        <p class="stat-label">features per film</p>
+      </div>
+      <div>
+        <span class="stat-num">30</span>
+        <p class="stat-label">picks per search</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Built with scikit-learn &middot; TF-IDF + Cosine Similarity &middot;
+    <a href="https://www.kaggle.com/datasets/tmdb/tmdb-movie-metadata" target="_blank">TMDB dataset</a>
+  </footer>
+
+  <script>
+    const input = document.getElementById('movie-input');
+
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') handleSearch();
+    });
+
+    function fillSearch(title) {
+      input.value = title;
+      input.focus();
+    }
+
+    function handleSearch() {
+      const query = input.value.trim();
+      if (!query) return;
+
+      const section = document.getElementById('results-section');
+      const label = document.getElementById('results-label');
+      const list = document.getElementById('results-list');
+
+      section.classList.add('visible');
+      label.textContent = 'Results for "' + query + '"';
+      list.innerHTML = '<p class="loading-msg">Finding similar movies…</p>';
+
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      // -------------------------------------------------------
+      // TODO: Replace this block with your actual API call.
+      // Example using a Flask backend:
+      //
+      // fetch('/recommend', {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({ movie: query })
+      // })
+      // .then(r => r.json())
+      // .then(data => renderResults(data.recommendations))
+      // .catch(() => showError());
+      //
+      // Expected response format:
+      // { "recommendations": ["Movie 1", "Movie 2", ...] }
+      // -------------------------------------------------------
+
+      // Demo: simulate a response after 800ms
+      setTimeout(function() {
+        const demoResults = [
+          'The Dark Knight', 'Interstellar', 'The Prestige',
+          'Memento', 'Batman Begins', 'The Matrix',
+          'Shutter Island', 'Fight Club', 'Looper',
+          'Eternal Sunshine of the Spotless Mind'
+        ];
+        renderResults(demoResults);
+      }, 800);
+    }
+
+    function renderResults(movies) {
+      const list = document.getElementById('results-list');
+      list.innerHTML = '';
+      movies.forEach(function(title, i) {
+        const score = Math.max(40, 100 - i * 6);
+        const card = document.createElement('div');
+        card.className = 'movie-card';
+        card.innerHTML =
+          '<p class="card-rank">#' + (i + 1) + ' match</p>' +
+          '<p class="card-title">' + escapeHtml(title) + '</p>' +
+          '<div class="bar-bg"><div class="bar-fill" style="width:' + score + '%"></div></div>';
+        list.appendChild(card);
+      });
+    }
+
+    function showError() {
+      document.getElementById('results-list').innerHTML =
+        '<p class="loading-msg">Could not connect to the recommendation engine. Is your Flask server running?</p>';
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+  </script>
+
+</body>
+</html>
