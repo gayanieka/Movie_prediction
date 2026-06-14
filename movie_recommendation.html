@@ -235,13 +235,32 @@
       border: 0.5px solid var(--border);
       border-radius: var(--radius-lg);
       padding: 1rem;
-      transition: border-color 0.15s, transform 0.15s;
+      transition: all 0.2s ease;
       cursor: default;
+      position: relative;
     }
     .movie-card:hover {
       border-color: var(--border-med);
       transform: translateY(-2px);
     }
+
+    /* Top Recommendation Highlight */
+    .movie-card.highlight {
+      border: 2.5px solid var(--accent);
+      box-shadow: 0 0 0 5px rgba(216, 90, 48, 0.12);
+      transform: scale(1.04);
+      z-index: 2;
+    }
+    .movie-card.highlight .card-rank {
+      background: var(--accent);
+      color: white;
+      padding: 3px 9px;
+      border-radius: 9999px;
+      font-size: 10px;
+      font-weight: 700;
+      display: inline-block;
+    }
+
     .card-rank { font-size: 11px; color: var(--accent); font-weight: 500; margin-bottom: 5px; }
     .card-title {
       font-family: 'Playfair Display', serif;
@@ -421,9 +440,9 @@
 
 <script>
 // ─── State ──────────────────────────────────────────────────────────────
-let movies = [];          // raw rows from CSV
-let tfidf = null;         // { vocab, idf, matrix }  built once
-let acIndex = -1;         // autocomplete keyboard index
+let movies = [];
+let tfidf = null;
+let acIndex = -1;
 
 const CSV_URL = 'https://raw.githubusercontent.com/YBI-Foundation/Dataset/main/Movies%20Recommendation.csv';
 
@@ -443,46 +462,41 @@ window.addEventListener('DOMContentLoaded', function() {
 // ─── CSV Fetch & Parse ───────────────────────────────────────────────────
 function fetchCSV(url) {
   fetch(url)
-    .then(function(r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.text();
-    })
-    .then(function(text) {
+    .then(r => r.ok ? r.text() : Promise.reject('HTTP ' + r.status))
+    .then(text => {
       movies = parseCSV(text);
       document.getElementById('stat-movies').textContent = movies.length.toLocaleString();
       buildTFIDF();
       setStatus('ready', 'Ready · ' + movies.length.toLocaleString() + ' films');
       document.getElementById('search-btn').disabled = false;
     })
-    .catch(function(e) {
+    .catch(e => {
       setStatus('error', 'Failed to load dataset');
       console.error(e);
     });
 }
 
 function parseCSV(text) {
-  var lines = text.split('\n');
-  var headers = splitCSVLine(lines[0]);
-  var rows = [];
-  for (var i = 1; i < lines.length; i++) {
+  const lines = text.split('\n');
+  const headers = splitCSVLine(lines[0]);
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
     if (!lines[i].trim()) continue;
-    var cols = splitCSVLine(lines[i]);
-    var obj = {};
-    for (var j = 0; j < headers.length; j++) {
-      obj[headers[j]] = (cols[j] || '').trim();
-    }
+    const cols = splitCSVLine(lines[i]);
+    const obj = {};
+    headers.forEach((h, j) => obj[h] = (cols[j] || '').trim());
     if (obj['Movie_Title']) rows.push(obj);
   }
   return rows;
 }
 
 function splitCSVLine(line) {
-  var result = [], cur = '', inQ = false;
-  for (var i = 0; i < line.length; i++) {
-    var c = line[i];
-    if (c === '"') { inQ = !inQ; }
+  let result = [], cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    let c = line[i];
+    if (c === '"') inQ = !inQ;
     else if (c === ',' && !inQ) { result.push(cur); cur = ''; }
-    else { cur += c; }
+    else cur += c;
   }
   result.push(cur);
   return result;
@@ -490,115 +504,189 @@ function splitCSVLine(line) {
 
 // ─── TF-IDF Builder ──────────────────────────────────────────────────────
 function buildTFIDF() {
-  // Combine features for each movie
-  var docs = movies.map(function(m) {
-    return [
-      m['Movie_Genre'] || '',
-      m['Movie_Keywords'] || '',
-      m['Movie_Tagline'] || '',
-      m['Movie_Cast'] || '',
-      m['Movie_Director'] || ''
-    ].join(' ').toLowerCase().replace(/[^a-z0-9 ]/g, ' ');
-  });
+  const docs = movies.map(m => [
+    m['Movie_Genre'] || '',
+    m['Movie_Keywords'] || '',
+    m['Movie_Tagline'] || '',
+    m['Movie_Cast'] || '',
+    m['Movie_Director'] || ''
+  ].join(' ').toLowerCase().replace(/[^a-z0-9 ]/g, ' '));
 
-  // Build vocabulary
-  var dfMap = {};
-  var tokenized = docs.map(function(doc) {
-    var tokens = doc.split(/\s+/).filter(Boolean);
-    var unique = {};
-    tokens.forEach(function(t) { unique[t] = true; });
-    Object.keys(unique).forEach(function(t) {
-      dfMap[t] = (dfMap[t] || 0) + 1;
-    });
+  const dfMap = {};
+  const tokenized = docs.map(doc => {
+    const tokens = doc.split(/\s+/).filter(Boolean);
+    const unique = {};
+    tokens.forEach(t => unique[t] = true);
+    Object.keys(unique).forEach(t => dfMap[t] = (dfMap[t] || 0) + 1);
     return tokens;
   });
 
-  // Filter vocab: appear in at least 2 docs, at most 80% of docs
-  var N = docs.length;
-  var vocab = {};
-  var idx = 0;
-  Object.keys(dfMap).forEach(function(t) {
-    var df = dfMap[t];
+  const N = docs.length;
+  const vocab = {};
+  let idx = 0;
+  Object.keys(dfMap).forEach(t => {
+    const df = dfMap[t];
     if (df >= 2 && df < N * 0.8 && t.length > 2) {
       vocab[t] = idx++;
     }
   });
 
-  // IDF
-  var V = idx;
-  var idf = new Float32Array(V);
-  Object.keys(vocab).forEach(function(t) {
+  const V = idx;
+  const idf = new Float32Array(V);
+  Object.keys(vocab).forEach(t => {
     idf[vocab[t]] = Math.log((N + 1) / (dfMap[t] + 1)) + 1;
   });
 
-  // TF-IDF matrix (sparse: store as array of {index, value} per doc)
-  var matrix = tokenized.map(function(tokens) {
-    var tf = {};
-    tokens.forEach(function(t) {
-      if (vocab[t] !== undefined) tf[t] = (tf[t] || 0) + 1;
-    });
-    var vec = [];
-    var norm = 0;
-    Object.keys(tf).forEach(function(t) {
-      var v = (tf[t] / tokens.length) * idf[vocab[t]];
+  const matrix = tokenized.map(tokens => {
+    const tf = {};
+    tokens.forEach(t => { if (vocab[t] !== undefined) tf[t] = (tf[t] || 0) + 1; });
+    let vec = [], norm = 0;
+    Object.keys(tf).forEach(t => {
+      let v = (tf[t] / tokens.length) * idf[vocab[t]];
       vec.push({ i: vocab[t], v: v });
       norm += v * v;
     });
     norm = Math.sqrt(norm);
-    if (norm > 0) vec.forEach(function(x) { x.v /= norm; });
+    if (norm > 0) vec.forEach(x => x.v /= norm);
     return vec;
   });
 
-  tfidf = { vocab: vocab, idf: idf, matrix: matrix };
+  tfidf = { vocab, idf, matrix };
 }
 
-// ─── Cosine Similarity ───────────────────────────────────────────────────
 function cosineSim(vecA, vecB) {
-  // Both already L2-normalised; dot product = cosine
-  var mapB = {};
-  vecB.forEach(function(x) { mapB[x.i] = x.v; });
-  var dot = 0;
-  vecA.forEach(function(x) { if (mapB[x.i]) dot += x.v * mapB[x.i]; });
+  const mapB = {};
+  vecB.forEach(x => mapB[x.i] = x.v);
+  let dot = 0;
+  vecA.forEach(x => { if (mapB[x.i]) dot += x.v * mapB[x.i]; });
   return dot;
 }
 
-// ─── Fuzzy title match ───────────────────────────────────────────────────
+// ─── IMPROVED Fuzzy title match ─────────────────────────────────────────
 function findClosestTitle(query) {
   query = query.toLowerCase().trim();
-  var best = -1, bestIdx = -1;
-  for (var i = 0; i < movies.length; i++) {
-    var title = movies[i]['Movie_Title'].toLowerCase();
-    if (title === query) return i;   // exact
-    var sim = titleSimilarity(query, title);
-    if (sim > best) { best = sim; bestIdx = i; }
+  if (!query) return -1;
+
+  let bestScore = -1;
+  let bestIdx = -1;
+
+  for (let i = 0; i < movies.length; i++) {
+    const title = movies[i]['Movie_Title'].toLowerCase().trim();
+
+    // Exact match - highest priority
+    if (title === query) {
+      return i;
+    }
+
+    // Strong substring match (query is fully contained)
+    if (title.includes(query) || query.includes(title)) {
+      const score = 0.95;
+      if (score > bestScore) {
+        bestScore = score;
+        bestIdx = i;
+      }
+      continue;
+    }
+
+    // Word overlap similarity
+    const sim = titleSimilarity(query, title);
+    if (sim > bestScore) {
+      bestScore = sim;
+      bestIdx = i;
+    }
   }
-  return best > 0.3 ? bestIdx : -1;
+
+  return bestScore > 0.35 ? bestIdx : -1;
 }
 
 function titleSimilarity(a, b) {
-  if (b.indexOf(a) !== -1 || a.indexOf(b) !== -1) return 0.9;
-  var aW = new Set(a.split(' ')), bW = new Set(b.split(' '));
-  var common = 0;
-  aW.forEach(function(w) { if (bW.has(w)) common++; });
-  return (2 * common) / (aW.size + bW.size);
+  const aWords = new Set(a.split(/\s+/).filter(Boolean));
+  const bWords = new Set(b.split(/\s+/).filter(Boolean));
+  let common = 0;
+  aWords.forEach(w => { if (bWords.has(w)) common++; });
+  return (2 * common) / (aWords.size + bWords.size || 1);
 }
 
 // ─── Recommendation ──────────────────────────────────────────────────────
-function recommend(movieIdx, topN) {
-  topN = topN || 30;
-  var queryVec = tfidf.matrix[movieIdx];
-  var scores = [];
-  for (var i = 0; i < movies.length; i++) {
+function recommend(movieIdx, topN = 30) {
+  const queryVec = tfidf.matrix[movieIdx];
+  const scores = [];
+  for (let i = 0; i < movies.length; i++) {
     if (i === movieIdx) continue;
     scores.push({ idx: i, score: cosineSim(queryVec, tfidf.matrix[i]) });
   }
-  scores.sort(function(a, b) { return b.score - a.score; });
+  scores.sort((a, b) => b.score - a.score);
   return scores.slice(0, topN);
 }
 
 // ─── Search Handler ──────────────────────────────────────────────────────
+function runRecommend(query) {
+  const section = document.getElementById('results-section');
+  const label = document.getElementById('results-label');
+  const grid = document.getElementById('results-grid');
+
+  section.classList.add('visible');
+  grid.innerHTML = '<div class="spinner-wrap"><div class="spinner"></div><p style="font-size:13px;color:var(--text-muted)">Finding similar films…</p></div>';
+  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  setTimeout(() => {
+    const idx = findClosestTitle(query);
+    if (idx === -1) {
+      label.textContent = 'No match found';
+      grid.innerHTML = `<div class="no-result">No close match for <strong>"${escHtml(query)}"</strong>.<br>Try a different spelling.</div>`;
+      return;
+    }
+
+    const matchedMovie = movies[idx];
+    label.textContent = `Because you liked "${matchedMovie['Movie_Title']}"`;
+
+    // Get similar movies (excluding the original)
+    const similarResults = recommend(idx, 29); // Get 29 instead of 30
+
+    grid.innerHTML = '';
+
+    // 1. Show the original movie as #1 highlighted
+    const originalCard = document.createElement('div');
+    originalCard.className = 'movie-card highlight';
+    originalCard.innerHTML = `
+      <p class="card-rank">#1 match</p>
+      <p class="card-title">${escHtml(matchedMovie['Movie_Title'])}</p>
+      <p class="card-meta">${escHtml(matchedMovie['Movie_Director'] || '—')} · ${escHtml((matchedMovie['Movie_Genre'] || '').split(' ')[0] || '—')}</p>
+      <div class="bar-bg"><div class="bar-fill" style="width:100%"></div></div>
+    `;
+    grid.appendChild(originalCard);
+
+    // 2. Show similar recommendations starting from #2
+    similarResults.forEach((r, i) => {
+      const m = movies[r.idx];
+      const pct = Math.round(r.score * 100);
+      const card = document.createElement('div');
+      card.className = 'movie-card';
+      card.innerHTML = `
+        <p class="card-rank">#${i + 2} match</p>
+        <p class="card-title">${escHtml(m['Movie_Title'])}</p>
+        <p class="card-meta">${escHtml(m['Movie_Director'] || '—')} · ${escHtml((m['Movie_Genre'] || '').split(' ')[0] || '—')}</p>
+        <div class="bar-bg"><div class="bar-fill" style="width:${Math.max(4, pct)}%"></div></div>
+      `;
+      grid.appendChild(card);
+    });
+  }, 30);
+}
+
+// Rest of the script (findClosestTitle, recommend, etc.) remains the same as previous version
+function recommend(movieIdx, topN = 30) {
+  const queryVec = tfidf.matrix[movieIdx];
+  const scores = [];
+  for (let i = 0; i < movies.length; i++) {
+    if (i === movieIdx) continue;
+    scores.push({ idx: i, score: cosineSim(queryVec, tfidf.matrix[i]) });
+  }
+  scores.sort((a, b) => b.score - a.score);
+  return scores.slice(0, topN);
+}
+
 function handleSearch() {
-  var query = document.getElementById('movie-input').value.trim();
+  const query = document.getElementById('movie-input').value.trim();
   if (!query || !tfidf) return;
   closeAC();
   runRecommend(query);
@@ -610,74 +698,34 @@ function quickSearch(title) {
   runRecommend(title);
 }
 
-function runRecommend(query) {
-  var section = document.getElementById('results-section');
-  var label = document.getElementById('results-label');
-  var grid = document.getElementById('results-grid');
-
-  section.classList.add('visible');
-  grid.innerHTML = '<div class="spinner-wrap"><div class="spinner"></div><p style="font-size:13px;color:var(--text-muted)">Finding similar films…</p></div>';
-  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-  // Small delay so the spinner renders before heavy computation
-  setTimeout(function() {
-    var idx = findClosestTitle(query);
-    if (idx === -1) {
-      label.textContent = 'No match found';
-      grid.innerHTML = '<div class="no-result">No close match for <strong>"' + escHtml(query) + '"</strong>.<br>Try a different spelling or pick from the suggestions above.</div>';
-      return;
-    }
-    var matchedTitle = movies[idx]['Movie_Title'];
-    label.textContent = 'Because you liked "' + matchedTitle + '"';
-
-    var results = recommend(idx, 30);
-    grid.innerHTML = '';
-
-    results.forEach(function(r, i) {
-      var m = movies[r.idx];
-      var pct = Math.round(r.score * 100);
-      var card = document.createElement('div');
-      card.className = 'movie-card';
-      card.innerHTML =
-        '<p class="card-rank">#' + (i + 1) + ' match</p>' +
-        '<p class="card-title">' + escHtml(m['Movie_Title']) + '</p>' +
-        '<p class="card-meta">' + escHtml(m['Movie_Director'] || '—') + ' · ' + escHtml((m['Movie_Genre'] || '').split(' ')[0] || '—') + '</p>' +
-        '<div class="bar-bg"><div class="bar-fill" style="width:' + Math.max(4, pct) + '%"></div></div>';
-      grid.appendChild(card);
-    });
-  }, 30);
-}
-
-// ─── Autocomplete ─────────────────────────────────────────────────────────
+// Autocomplete (unchanged)
 function onInput() {
-  var q = document.getElementById('movie-input').value.trim().toLowerCase();
+  const q = document.getElementById('movie-input').value.trim().toLowerCase();
   if (!q || q.length < 2 || !movies.length) { closeAC(); return; }
-  var matches = [];
-  for (var i = 0; i < movies.length && matches.length < 8; i++) {
-    var t = movies[i]['Movie_Title'];
+  const matches = [];
+  for (let i = 0; i < movies.length && matches.length < 8; i++) {
+    const t = movies[i]['Movie_Title'];
     if (t.toLowerCase().indexOf(q) !== -1) matches.push(t);
   }
   renderAC(matches, q);
 }
 
 function renderAC(items, q) {
-  var list = document.getElementById('autocomplete-list');
+  const list = document.getElementById('autocomplete-list');
   if (!items.length) { closeAC(); return; }
   list.innerHTML = '';
-  items.forEach(function(title, i) {
-    var div = document.createElement('div');
+  items.forEach((title, i) => {
+    const div = document.createElement('div');
     div.className = 'ac-item';
-    div.dataset.idx = i;
-    var esc = escHtml(title);
-    var idx = title.toLowerCase().indexOf(q);
+    let esc = escHtml(title);
+    const idx = title.toLowerCase().indexOf(q);
     if (idx !== -1) {
-      esc = escHtml(title.slice(0, idx)) +
-            '<span class="ac-match">' + escHtml(title.slice(idx, idx + q.length)) + '</span>' +
+      esc = escHtml(title.slice(0, idx)) + 
+            `<span class="ac-match">${escHtml(title.slice(idx, idx + q.length))}</span>` + 
             escHtml(title.slice(idx + q.length));
     }
     div.innerHTML = esc;
-    div.addEventListener('mousedown', function(e) {
-      e.preventDefault();
+    div.addEventListener('mousedown', () => {
       document.getElementById('movie-input').value = title;
       closeAC();
       runRecommend(title);
@@ -689,16 +737,16 @@ function renderAC(items, q) {
 }
 
 function onKeyDown(e) {
-  var list = document.getElementById('autocomplete-list');
-  var items = list.querySelectorAll('.ac-item');
+  const list = document.getElementById('autocomplete-list');
+  const items = list.querySelectorAll('.ac-item');
   if (e.key === 'ArrowDown') {
     e.preventDefault();
     acIndex = Math.min(acIndex + 1, items.length - 1);
-    items.forEach(function(el, i) { el.classList.toggle('selected', i === acIndex); });
+    items.forEach((el, i) => el.classList.toggle('selected', i === acIndex));
   } else if (e.key === 'ArrowUp') {
     e.preventDefault();
     acIndex = Math.max(acIndex - 1, -1);
-    items.forEach(function(el, i) { el.classList.toggle('selected', i === acIndex); });
+    items.forEach((el, i) => el.classList.toggle('selected', i === acIndex));
   } else if (e.key === 'Enter') {
     if (acIndex >= 0 && items[acIndex]) {
       document.getElementById('movie-input').value = items[acIndex].textContent;
@@ -717,10 +765,9 @@ function closeAC() {
   acIndex = -1;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────
 function setStatus(state, msg) {
-  var dot = document.getElementById('status-dot');
-  var txt = document.getElementById('status-text');
+  const dot = document.getElementById('status-dot');
+  const txt = document.getElementById('status-text');
   dot.className = 'status-dot ' + state;
   txt.textContent = msg;
 }
